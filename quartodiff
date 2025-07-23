@@ -20,18 +20,34 @@ prevcommit=$(git rev-parse $2)
 oldfilename="${RANDOM}.tex"
 newfilename="${RANDOM}.tex"
 
-# Checkout the previous commit to render the old version
+oldfiledir="${RANDOM}"
+newfiledir="${RANDOM}"
+mkdir ${oldfiledir}
+mkdir ${newfiledir}
+
 git checkout $prevcommit
-quarto render $1 --to latex --output ${oldfilename}
+
+quarto render $1 --to latex --output ${oldfilename} --output-dir ${oldfiledir}
+# Find the actual .tex file if Quarto output is nested
+oldfilepath=$(find "${oldfiledir}" -name ${oldfilename})
 
 # Render the Quarto file from the current commit to LaTeX  
 git checkout $curcommit
-quarto render $1 --to latex --output ${newfilename}
 
-# Generate a diff between the two LaTeX files using latexdiff
-# --flatten option handles multi-file LaTeX documents
-latexdiff --flatten ${oldfilename} ${newfilename} > diff.tex
+quarto render $1 --to latex --output ${newfilename} --output-dir ${newfiledir}
+newfilepath=$(find "${newfiledir}" -name ${newfilename})
+
+# Check two LaTex files were generated before trying to run latexdiff
+if [ ! -f "${oldfilepath}" ] || [ ! -f "${newfilepath}" ]; then
+    echo "Error: One or both LaTeX files were not generated."
+    rm -r "${oldfiledir}" "${newfiledir}"
+    exit 1
+fi
+
+latexdiff --flatten ${oldfilepath} ${newfilepath} > diff.tex
 
 # Compile the diff to PDF and clean up auxiliary files
 latexmk -pdf diff.tex && latexmk -c diff.tex
-rm diff.tex ${oldfilename} ${newfilename}
+
+rm diff.tex 
+rm -r ${oldfiledir} ${newfiledir}
