@@ -1,21 +1,37 @@
 #!/bin/bash
 
+# Script to generate a PDF diff between two versions of a Quarto document
+# This script compares a Quarto file between the current commit and a previous commit
+
+# Check if both arguments are provided
+if [ $# -ne 2 ]; then
+    echo "Error: This script requires exactly 2 arguments."
+    echo "Usage: $0 <quarto_file> <previous_commit>"
+    echo "  <quarto_file>: The .qmd file to render. For quarto projects, any render target will do (e.g. index.qmd)"
+    echo "  <previous_commit>: The commit hash or reference to compare against"
+    exit 1
+fi
+
+# Resolve commit references 
 curcommit=$(git rev-parse --abbrev-ref HEAD)
 prevcommit=$(git rev-parse $2)
 
+# Generate random filenames for temporary LaTeX files to avoid conflicts
 oldfilename="${RANDOM}.tex"
 newfilename="${RANDOM}.tex"
 
+# Checkout the previous commit to render the old version
 git checkout $prevcommit
-
 quarto render $1 --to latex --output ${oldfilename}
 
+# Render the Quarto file from the current commit to LaTeX  
 git checkout $curcommit
-
 quarto render $1 --to latex --output ${newfilename}
 
+# Generate a diff between the two LaTeX files using latexdiff
+# --flatten option handles multi-file LaTeX documents
 latexdiff --flatten ${oldfilename} ${newfilename} > diff.tex
 
+# Compile the diff to PDF and clean up auxiliary files
 latexmk -pdf diff.tex && latexmk -c diff.tex
-
 rm diff.tex ${oldfilename} ${newfilename}
